@@ -50,7 +50,8 @@ def plot_components(model, scaling, label, out_path):
     grid = fig.add_gridspec(len(components), 2)
 
     for row, period in enumerate(components):
-        days = np.linspace(0, period_days(period), 500)
+        # Hourly, the resolution of the data: between the hours, high harmonics are not pinned down by the data
+        days = np.arange(0, period_days(period) + 1e-9, 1 / 24)
         with torch.no_grad():
             waves = model.waves(torch.tensor(days, dtype=torch.float32).to(device))[period]
             waves = waves.cpu().numpy() if model.log_link else (waves * scaling.y_std).cpu().numpy()
