@@ -1,11 +1,14 @@
 import argparse
+import json
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
 from sinetwork.data import Scaling, holiday_of_day, make_loader, split
+from sinetwork import lstsq
 from sinetwork.datasets import DATASETS, csv_dataset
 from sinetwork.model import PERIODS, SinusoidalNetwork, parse_components
 from sinetwork.plot import plot_components, plot_fit, plot_series
@@ -14,16 +17,19 @@ from sinetwork.plot import plot_components, plot_fit, plot_series
 METRICS = ['rmse', 'mae', 'bias', 'r2']
 
 
+def scores(predictions, targets, scaling):
+    """RMSE, MAE and bias (mean of prediction - target) in the target's units, and R², from scaled values."""
+    error = np.asarray(predictions, dtype=float) - np.asarray(targets, dtype=float)
+    mse = float(np.mean(error ** 2))
+    return {'rmse': mse ** 0.5 * scaling.y_std, 'mae': float(np.mean(np.abs(error))) * scaling.y_std,
+            'bias': float(np.mean(error)) * scaling.y_std, 'r2': 1 - mse / float(np.var(targets))}
+
+
 def evaluate(model, loader, scaling):
-    """RMSE, MAE and bias (mean of prediction - target) in the target's units, and R²."""
     model.eval()
     with torch.no_grad():
         predictions, targets = zip(*[(model(inputs), batch_targets) for inputs, batch_targets in loader])
-    error = torch.cat(predictions) - torch.cat(targets)
-    targets = torch.cat(targets)
-    mse = (error ** 2).mean().item()
-    return {'rmse': mse ** 0.5 * scaling.y_std, 'mae': error.abs().mean().item() * scaling.y_std,
-            'bias': error.mean().item() * scaling.y_std, 'r2': 1 - mse / targets.var(unbiased=False).item()}
+    return scores(torch.cat(predictions).cpu().numpy(), torch.cat(targets).cpu().numpy(), scaling)
 
 
 def train_model(model, dataset, train_df, test_df, scaling, train_loader, test_loader, criterion, optimizer,
@@ -130,6 +136,24 @@ def main():
 
     train_model(model, dataset, train_df, test_df, scaling, train_loader, test_loader, criterion, optimizer,
                 plot_dir, args.epochs, args.plot_every)
+
+    # The exact optimum of the same model, as a reference for how well training did
+    t_train, t_test = scaling.days(train_df['datetime']), scaling.days(test_df['datetime'])
+    y_train, y_test = [(df_['y'].to_numpy() - scaling.y_mean) / scaling.y_std for df_ in (train_df, test_df)]
+    coefficients = lstsq.fit(model, t_train, y_train)
+    summary = {
+        'dataset': dataset.name, 'run': run_name,
+        'network': {'train': evaluate(model, train_loader, scaling), 'test': evaluate(model, test_loader, scaling)},
+        'lstsq': {'train': scores(lstsq.predict(model, coefficients, t_train), y_train, scaling),
+                  'test': scores(lstsq.predict(model, coefficients, t_test), y_test, scaling)},
+    }
+    (plot_dir / 'summary.json').write_text(json.dumps(summary, indent=2))
+    print(f'Test RMSE: network {summary["network"]["test"]["rmse"]:.4f}, '
+          f'least squares {summary["lstsq"]["test"]["rmse"]:.4f}')
+    torch.save({'kwargs': dict(components=components, span=model.span, log_link=model.log_link,
+                               modulation=args.modulate, holiday_of_day=model.holiday_of_day.cpu().numpy()
+                               if args.holidays else None),
+                'state_dict': model.state_dict(), 'scaling': scaling, 'lstsq': coefficients}, plot_dir / 'model.pt')
 
     print("Training complete.")
 
