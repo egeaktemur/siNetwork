@@ -21,12 +21,14 @@ def period_days(period):
 
 
 class SinusoidalNetwork(nn.Module):
-    """Predicts y(t) = offset + slope·t/span + Σ a·sin(b·t + c) over periodic components.
+    """Predicts y(t) = offset + slope·t/span + Σ α·sin(ω·t) + β·cos(ω·t) over periodic components.
 
     t is time in days and span is the length of the training range in days. A
     component with period P and n sinusoids has its frequencies fixed at the
-    harmonics 2πk/P, k = 1..n. The parameters (amplitude a, phase c, offset,
-    slope) are produced by an MLP fed a constant input.
+    harmonics ω = 2πk/P, k = 1..n. The parameters (sine and cosine
+    coefficients α and β, offset, slope) are produced by an MLP fed a constant
+    input. α·sin + β·cos is a sinusoid with amplitude √(α²+β²); unlike
+    amplitude and phase, it makes the squared error convex in α and β.
     """
 
     def __init__(self, components, span, input_size=64, hidden_size1=128, hidden_size2=256):
@@ -41,20 +43,25 @@ class SinusoidalNetwork(nn.Module):
         self.fc3 = nn.Linear(hidden_size2, 2 * len(harmonics) + 2)
 
     def forward(self, t):
-        a, b, c, offset, slope = self.get_params()
-        return offset + slope * t / self.span + (a * torch.sin(b * t.unsqueeze(1) + c)).sum(dim=1)
+        _, _, offset, slope = self.get_params()
+        return offset + slope * t / self.span + self.sinusoids(t).sum(dim=1)
 
     def get_params(self):
         x = torch.relu(self.fc1(torch.ones(self.fc1.in_features, device=self.fc1.weight.device)))
         x = torch.relu(self.fc2(x))
         x = self.fc3(x)
         n = len(self.harmonics)
-        a, c = x[:2 * n].view(2, n)
+        alpha, beta = x[:2 * n].view(2, n)
         offset, slope = x[2 * n:]
-        return a, self.harmonics, c, offset, slope
+        return alpha, beta, offset, slope
+
+    def sinusoids(self, t):
+        """Every sinusoid evaluated at t, shape (len(t), number of harmonics)."""
+        alpha, beta, _, _ = self.get_params()
+        phase = self.harmonics * t.unsqueeze(1)
+        return alpha * torch.sin(phase) + beta * torch.cos(phase)
 
     def waves(self, t):
         """Each sinusoid evaluated at t, as {period: tensor of shape (len(t), count)}."""
-        a, b, c, _, _ = self.get_params()
-        values = a * torch.sin(b * t.unsqueeze(1) + c)
+        values = self.sinusoids(t)
         return dict(zip(self.components, values.split(list(self.components.values()), dim=1)))

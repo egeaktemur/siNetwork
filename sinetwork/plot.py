@@ -18,7 +18,7 @@ def plot_fit(model, train_df, test_df, scaling, label, out_path):
     all_t = torch.tensor(scaling.days(all_datetimes), dtype=torch.float32).to(device)
 
     with torch.no_grad():
-        _, _, _, offset, slope = model.get_params()
+        _, _, offset, slope = model.get_params()
         total = scaling.unscale(model(all_t).cpu().numpy())
         slow = offset + slope * all_t / model.span + model.waves(all_t)[slowest].sum(1)
         slow = scaling.unscale(slow.cpu().numpy())

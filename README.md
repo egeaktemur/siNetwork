@@ -2,11 +2,11 @@
 
 Fits a time series as a learned sum of sinusoids over periodic components (day, week, year, ...) plus a linear trend:
 
-    y(t) = offset + slope·t/span + Σ_components Σ_k a_k·sin(b_k·t + c_k)
+    y(t) = offset + slope·t/span + Σ_components Σ_k α_k·sin(ω_k·t) + β_k·cos(ω_k·t)
 
-`t` is time in days. A component with period P and n sinusoids has its frequencies fixed at the harmonics 2πk/P (k = 1..n). The amplitudes, phases, offset and slope are output by an MLP fed a constant input.
+`t` is time in days. A component with period P and n sinusoids has its frequencies fixed at the harmonics ω_k = 2πk/P (k = 1..n). The coefficients α and β, offset and slope are output by an MLP fed a constant input.
 
-Each sinusoid has an amplitude and a phase, so n sinusoids give a component 2n free numbers: it can follow a shape with about one value per P/2n. The default, `week:84 year:2`, is:
+Each sinusoid has two coefficients (equivalently an amplitude and a phase), so n sinusoids give a component 2n free numbers: it can follow a shape with about one value per P/2n. The default, `week:84 year:2`, is:
 
 - `week:84`: 168 numbers for the 168 hours of a week, so any hourly weekly profile (Monday mornings can differ from Sunday mornings). The daily cycle is included, since the 7th weekly harmonic is one cycle per day.
 - `year:2`: 4 numbers, about one per 3 months: a smooth seasonal swing. More yearly detail (`year:6` for monthly) needs several years of training data; with `airquality`'s single year it extrapolates wildly.
