@@ -14,8 +14,29 @@ Fits a time series as a learned sum of sinusoids over periodic components (day, 
 | `jena` | Temperature, [Jena Climate](https://www.bgc-jena.mpg.de/wetter/) (Max Planck Institute) | 2009–2016, 10 min → hourly | `day:5 year:5` |
 | `bike` | Bike rentals per hour, [UCI Bike Sharing](https://archive.ics.uci.edu/dataset/275/bike+sharing+dataset) | 2011–2012, hourly | `day:6 week:3 year:3` |
 | `power` | Household active power, [UCI Individual Household Electric Power Consumption](https://archive.ics.uci.edu/dataset/235/individual+household+electric+power+consumption) | 2006–2010, 1 min → hourly | `day:6 week:3 year:4` |
+| `metro` | Traffic volume on I-94, [UCI Metro Interstate Traffic Volume](https://archive.ics.uci.edu/dataset/492/metro+interstate+traffic+volume) | 2012–2018, hourly | `day:6 week:3 year:3` |
+| `beijing-temp` | Temperature, [UCI Beijing PM2.5](https://archive.ics.uci.edu/dataset/381/beijing+pm2+5+data) | 2010–2014, hourly | `day:5 year:5` |
+| `beijing-pm25` | PM2.5 concentration, same source | 2010–2014, hourly | `day:5 week:3 year:4` |
 
-Data files are downloaded into `data/` (not tracked in git) the first time a dataset is used.
+`beijing-pm25` is mostly driven by weather episodes rather than cycles, so expect a poor fit; it is there as a hard case.
+
+## Folders
+
+Data files are downloaded the first time a dataset is used, into one folder per source with the original file names. Plots go into one folder per dataset, with a subfolder per component setting so runs with different components don't overwrite each other. Both folders are not tracked in git.
+
+    data/
+      airquality/AirQualityUCI.csv
+      beijing/PRSA_data_2010.1.1-2014.12.31.csv     # shared by beijing-temp and beijing-pm25
+      bike/hour.csv
+      jena/jena_climate_2009_2016.csv
+      metro/Metro_Interstate_Traffic_Volume.csv.gz
+      power/household_power_consumption.txt
+    plots/
+      bike/
+        data.png                                     # the raw series
+        day6-week3-year3/                            # one folder per --components setting
+          fit_epoch_0010.png                         # fitted waves, every 10 epochs
+          fit_epoch_0020.png
 
 ## Usage
 
@@ -32,9 +53,9 @@ Options:
 - `--test-fraction` — final fraction of the time range held out for testing (default 0.2)
 - `--data-dir` (default `data`), `--plot-dir` (default `plots`)
 
-The target is standardized for training. Every 10 epochs the loss and the train/test RMSE (in the target's units) are printed and a plot of the fitted waves is saved to `plots/<dataset>/`.
+The target is standardized for training. Every 10 epochs the loss and the train/test RMSE (in the target's units) are printed and a plot of the fitted waves is saved to `plots/<dataset>/<components>/fit_epoch_NNNN.png`.
 
-For the larger datasets (`jena`, `power`) a bigger batch, e.g. `--batch-size 256`, keeps epochs short.
+For the larger datasets (`jena`, `power`, `metro`, `beijing-*`) a bigger batch, e.g. `--batch-size 256`, keeps epochs short.
 
 ## Using your own data
 
@@ -44,14 +65,14 @@ Any CSV with a timestamp column and a numeric target column:
 
 `--sep` sets the separator (default `,`). Timestamps are parsed with `pandas.to_datetime`, so ISO format (`2024-01-31 13:00`) is safest.
 
-To add a dataset permanently, register a reader in [sinetwork/datasets.py](sinetwork/datasets.py). It takes the data directory and returns a DataFrame with a `datetime` column and a numeric `y` column:
+To add a dataset permanently, register a reader in [sinetwork/datasets.py](sinetwork/datasets.py). It takes the dataset's folder (`data/<name>/`) and returns a DataFrame with a `datetime` column and a numeric `y` column:
 
 ```python
 @register('mydata', url='https://example.com/mydata.zip', files=('mydata.csv',),
           label='Load (kW)', components={'day': 6, 'week': 3, 'year': 4})
-def read_mydata(data_dir):
-    df = pd.read_csv(data_dir / 'mydata.csv', parse_dates=['timestamp'])
+def read_mydata(folder):
+    df = pd.read_csv(folder / 'mydata.csv', parse_dates=['timestamp'])
     return df.rename(columns={'timestamp': 'datetime', 'load': 'y'})
 ```
 
-`files` are extracted from the zip at `url` into `data/` if missing (`url` is optional for files you place there yourself). Missing values in `y` are dropped. The dataset then becomes available as `--dataset mydata`.
+`files` are extracted from the zip at `url` into `data/mydata/` if missing (`url` is optional for files you place there yourself). Datasets read from the same files can share a folder with `folder='...'`. Missing values in `y` are dropped. The dataset then becomes available as `--dataset mydata`.

@@ -120,3 +120,34 @@ def read_power(folder):
     df['datetime'] = pd.to_datetime(df['Date'] + ' ' + df['Time'], format='%d/%m/%Y %H:%M:%S')
     # 1-minute readings, averaged to hourly
     return df.set_index('datetime')['Global_active_power'].resample('h').mean().rename('y').reset_index()
+
+
+@register('metro', url='https://archive.ics.uci.edu/static/public/492/metro+interstate+traffic+volume.zip',
+          files=('Metro_Interstate_Traffic_Volume.csv.gz',), label='Traffic volume (cars per hour)',
+          components={'day': 6, 'week': 3, 'year': 3})
+def read_metro(folder):
+    df = pd.read_csv(folder / 'Metro_Interstate_Traffic_Volume.csv.gz', usecols=['date_time', 'traffic_volume'])
+    df['datetime'] = pd.to_datetime(df['date_time'])
+    # Hours with several weather conditions appear once per condition
+    return df.groupby('datetime', as_index=False)['traffic_volume'].first().rename(columns={'traffic_volume': 'y'})
+
+
+def read_beijing(folder, column):
+    df = pd.read_csv(folder / 'PRSA_data_2010.1.1-2014.12.31.csv')
+    df['datetime'] = pd.to_datetime(df[['year', 'month', 'day', 'hour']])
+    df['y'] = df[column]
+    return df
+
+
+BEIJING = dict(url='https://archive.ics.uci.edu/static/public/381/beijing+pm2+5+data.zip',
+               files=('PRSA_data_2010.1.1-2014.12.31.csv',), folder='beijing')
+
+
+@register('beijing-temp', label='Temperature (°C)', components={'day': 5, 'year': 5}, **BEIJING)
+def read_beijing_temp(folder):
+    return read_beijing(folder, 'TEMP')
+
+
+@register('beijing-pm25', label='PM2.5 (µg/m³)', components={'day': 5, 'week': 3, 'year': 4}, **BEIJING)
+def read_beijing_pm25(folder):
+    return read_beijing(folder, 'pm2.5')
