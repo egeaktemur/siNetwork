@@ -8,10 +8,10 @@ import torch
 from sinetwork.model import period_days
 
 
-def plot_waves(model, train_df, test_df, scaling, label, out_path):
+def plot_fit(model, train_df, test_df, scaling, label, out_path):
+    """Data and fitted waves over the whole time range."""
     device = next(model.parameters()).device
-    components = model.components
-    slowest = max(components, key=period_days)
+    slowest = max(model.components, key=period_days)
 
     # Hourly grid over the whole data range
     all_datetimes = pd.date_range(start=train_df['datetime'].min(), end=test_df['datetime'].max(), freq='h')
@@ -23,23 +23,30 @@ def plot_waves(model, train_df, test_df, scaling, label, out_path):
         slow = offset + slope * all_t / model.span + model.waves(all_t)[slowest].sum(1)
         slow = scaling.unscale(slow.cpu().numpy())
 
-    fig = plt.figure(figsize=(40, 5 * (len(components) + 2)))
-    grid = fig.add_gridspec(len(components) + 1, 2, height_ratios=[2] + [1] * len(components))
+    fig, ax = plt.subplots(figsize=(20, 7))
+    ax.scatter(train_df['datetime'], train_df['y'], label=f'{label} (train)', s=4, color='blue')
+    ax.scatter(test_df['datetime'], test_df['y'], label=f'{label} (test)', s=4, color='gray')
+    ax.plot(all_datetimes, total, label='Total Sinusoidal Wave', color='orange')
+    ax.plot(all_datetimes, slow, label=f'Trend + {slowest.capitalize()} Sinusoidal Wave', color='red')
+    ax.set_xlabel('Datetime')
+    ax.set_ylabel(label)
+    ax.set_title(f'{label} and Sinusoidal Waves Over Time')
+    ax.legend()
+    ax.grid(True)
 
-    # Data and fitted waves spanning the top row
-    ax_big = fig.add_subplot(grid[0, :])
-    ax_big.scatter(train_df['datetime'], train_df['y'], label=f'{label} (train)', s=10, color='blue')
-    ax_big.scatter(test_df['datetime'], test_df['y'], label=f'{label} (test)', s=10, color='gray')
-    ax_big.plot(all_datetimes, total, label='Total Sinusoidal Wave', color='orange')
-    ax_big.plot(all_datetimes, slow, label=f'Trend + {slowest.capitalize()} Sinusoidal Wave', color='red')
-    ax_big.set_xlabel('Datetime')
-    ax_big.set_ylabel(label)
-    ax_big.set_title(f'{label} and Sinusoidal Waves Over Time')
-    ax_big.legend()
-    ax_big.grid(True)
+    fig.tight_layout()
+    fig.savefig(out_path)
+    plt.close(fig)
 
-    # One row per component, over its first period
-    for row, period in enumerate(components, start=1):
+
+def plot_components(model, scaling, label, out_path):
+    """One row per component over its first period: the sum of its sinusoids and each sinusoid."""
+    device = next(model.parameters()).device
+    components = model.components
+    fig = plt.figure(figsize=(16, 4 * len(components)))
+    grid = fig.add_gridspec(len(components), 2)
+
+    for row, period in enumerate(components):
         days = np.linspace(0, period_days(period), 500)
         with torch.no_grad():
             waves = model.waves(torch.tensor(days, dtype=torch.float32).to(device))[period]

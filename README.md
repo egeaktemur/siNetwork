@@ -35,8 +35,8 @@ Each dataset is one CSV file, `data/<dataset>/<dataset>.csv`, downloaded the fir
       bike/
         data.png                                     # the raw series
         day6-week3-year3/                            # one folder per --components setting
-          fit_epoch_0010.png                         # fitted waves, every 10 epochs
-          fit_epoch_0020.png
+          fit_epoch_0050.png                         # data and fitted waves over time, every --plot-every epochs
+          components_epoch_0050.png                  # each component's sinusoids over one period
 
 ## Usage
 
@@ -51,9 +51,9 @@ Options:
 - `--components` — sinusoids per period, e.g. `--components day:5 week:3 year:4`. A period is `day`, `week`, `year` or a number of days (`0.5:2` for a 12-hour cycle). Defaults to the dataset's.
 - `--epochs` (default 500), `--batch-size` (default 256), `--seed` (default 0)
 - `--test-fraction` — final fraction of the time range held out for testing (default 0.2)
-- `--data-dir` (default `data`), `--plot-dir` (default `plots`)
+- `--data-dir` (default `data`), `--plot-dir` (default `plots`), `--plot-every` (default 50)
 
-The target is standardized for training. Every 10 epochs the loss and the train/test RMSE (in the target's units) are printed and a plot of the fitted waves is saved to `plots/<dataset>/<components>/fit_epoch_NNNN.png`.
+The target is standardized for training. Every 10 epochs the loss and the train/test RMSE (in the target's units) are printed. Every `--plot-every` epochs and after the last one, two plots are saved to `plots/<dataset>/<components>/`: `fit_epoch_NNNN.png` (data and fitted waves over time) and `components_epoch_NNNN.png` (each component's sinusoids over one period).
 
 ## Using your own data
 

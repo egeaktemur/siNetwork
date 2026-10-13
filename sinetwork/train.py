@@ -8,7 +8,7 @@ import torch.optim as optim
 from sinetwork.data import Scaling, make_loader, split
 from sinetwork.datasets import DATASETS, csv_dataset
 from sinetwork.model import PERIODS, SinusoidalNetwork, parse_components
-from sinetwork.plot import plot_series, plot_waves
+from sinetwork.plot import plot_components, plot_fit, plot_series
 
 
 def evaluate_rmse(model, loader, scaling):
@@ -23,7 +23,7 @@ def evaluate_rmse(model, loader, scaling):
 
 
 def train_model(model, dataset, train_df, test_df, scaling, train_loader, test_loader, criterion, optimizer,
-                plot_dir, num_epochs=1000):
+                plot_dir, num_epochs=1000, plot_every=50):
     for epoch in range(num_epochs):
         epoch_loss = 0
         model.train()
@@ -40,7 +40,9 @@ def train_model(model, dataset, train_df, test_df, scaling, train_loader, test_l
             print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {epoch_loss/len(train_loader):.4f}, '
                   f'Train RMSE: {evaluate_rmse(model, train_loader, scaling):.4f}, '
                   f'Test RMSE: {evaluate_rmse(model, test_loader, scaling):.4f}')
-            plot_waves(model, train_df, test_df, scaling, dataset.label, plot_dir / f'fit_epoch_{epoch+1:04d}.png')
+        if (epoch + 1) % plot_every == 0 or epoch + 1 == num_epochs:
+            plot_fit(model, train_df, test_df, scaling, dataset.label, plot_dir / f'fit_epoch_{epoch+1:04d}.png')
+            plot_components(model, scaling, dataset.label, plot_dir / f'components_epoch_{epoch+1:04d}.png')
 
 
 def main():
@@ -58,6 +60,7 @@ def main():
     parser.add_argument('--batch-size', type=int, default=256)
     parser.add_argument('--test-fraction', type=float, default=0.2, help='final fraction of the time range held out')
     parser.add_argument('--plot-dir', type=Path, default=Path('plots'))
+    parser.add_argument('--plot-every', type=int, default=50, help='save plots every N epochs and after the last')
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
 
@@ -97,7 +100,7 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=0.001, fused=True)
 
     train_model(model, dataset, train_df, test_df, scaling, train_loader, test_loader, criterion, optimizer,
-                plot_dir, args.epochs)
+                plot_dir, args.epochs, args.plot_every)
 
     print("Training complete.")
 
