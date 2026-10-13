@@ -3,11 +3,10 @@
 A dataset is one CSV file, data/<folder>/<folder>.csv, and a reader function
 that takes its path and returns a DataFrame with a `datetime` column and a
 float target column `y`. Register it with `@register(...)`, giving the zip
-archive and member to download the file from and the periodic components it is
-fit with by default:
+archive and member to download the file from:
 
     @register('mydata', url='https://example.com/mydata.zip', member='raw/mydata.csv',
-              label='Load (kW)', components={'day': 6, 'week': 3, 'year': 4})
+              label='Load (kW)')
     def read_mydata(path):
         df = pd.read_csv(path, parse_dates=['timestamp'])
         return df.rename(columns={'timestamp': 'datetime', 'load': 'y'})
@@ -31,7 +30,6 @@ class Dataset:
     name: str
     read: Callable[[Path], pd.DataFrame]  # CSV path -> DataFrame with `datetime` and `y`
     label: str  # name of the target, used in plots
-    components: dict  # default {period: sinusoid count}, see model.PERIODS
     url: Optional[str] = None  # zip archive containing the CSV
     member: Optional[str] = None  # the CSV's name in the archive; a .gz member is decompressed
     folder: Optional[str] = None  # stored as data/<folder>/<folder>.csv, folder defaults to `name`
@@ -70,7 +68,7 @@ def download(url, member, path):
             shutil.copyfileobj(gzip.open(src) if member.endswith('.gz') else src, dst)
 
 
-def csv_dataset(path, time_col, target_col, components, sep=','):
+def csv_dataset(path, time_col, target_col, sep=','):
     """A dataset read from an arbitrary CSV file with a timestamp and a target column."""
     path = Path(path)
 
@@ -80,11 +78,11 @@ def csv_dataset(path, time_col, target_col, components, sep=','):
         df['y'] = pd.to_numeric(df[target_col], errors='coerce')
         return df
 
-    return Dataset(name=path.stem, read=read, label=target_col, components=components, path=path)
+    return Dataset(name=path.stem, read=read, label=target_col, path=path)
 
 
 @register('airquality', url='https://archive.ics.uci.edu/static/public/360/air+quality.zip',
-          member='AirQualityUCI.csv', label='Temperature (°C)', components={'day': 5, 'year': 5})
+          member='AirQualityUCI.csv', label='Temperature (°C)')
 def read_airquality(path):
     df = pd.read_csv(path, sep=';', decimal=',')
     df.columns = [col.strip() for col in df.columns]
@@ -95,7 +93,7 @@ def read_airquality(path):
 
 
 @register('jena', url='https://storage.googleapis.com/tensorflow/tf-keras-datasets/jena_climate_2009_2016.csv.zip',
-          member='jena_climate_2009_2016.csv', label='Temperature (°C)', components={'day': 5, 'year': 5})
+          member='jena_climate_2009_2016.csv', label='Temperature (°C)')
 def read_jena(path):
     df = pd.read_csv(path, usecols=['Date Time', 'T (degC)'])
     df['datetime'] = pd.to_datetime(df['Date Time'], format='%d.%m.%Y %H:%M:%S')
@@ -104,7 +102,7 @@ def read_jena(path):
 
 
 @register('bike', url='https://archive.ics.uci.edu/static/public/275/bike+sharing+dataset.zip',
-          member='hour.csv', label='Bike rentals per hour', components={'day': 6, 'week': 3, 'year': 3})
+          member='hour.csv', label='Bike rentals per hour')
 def read_bike(path):
     df = pd.read_csv(path)
     df['datetime'] = pd.to_datetime(df['dteday']) + pd.to_timedelta(df['hr'], unit='h')
@@ -113,8 +111,7 @@ def read_bike(path):
 
 
 @register('power', url='https://archive.ics.uci.edu/static/public/235/individual+household+electric+power+consumption.zip',
-          member='household_power_consumption.txt', label='Global active power (kW)',
-          components={'day': 6, 'week': 3, 'year': 4})
+          member='household_power_consumption.txt', label='Global active power (kW)')
 def read_power(path):
     df = pd.read_csv(path, sep=';', na_values='?', usecols=['Date', 'Time', 'Global_active_power'])
     df['datetime'] = pd.to_datetime(df['Date'] + ' ' + df['Time'], format='%d/%m/%Y %H:%M:%S')
@@ -123,8 +120,7 @@ def read_power(path):
 
 
 @register('metro', url='https://archive.ics.uci.edu/static/public/492/metro+interstate+traffic+volume.zip',
-          member='Metro_Interstate_Traffic_Volume.csv.gz', label='Traffic volume (cars per hour)',
-          components={'day': 6, 'week': 3, 'year': 3})
+          member='Metro_Interstate_Traffic_Volume.csv.gz', label='Traffic volume (cars per hour)')
 def read_metro(path):
     df = pd.read_csv(path, usecols=['date_time', 'traffic_volume'])
     df['datetime'] = pd.to_datetime(df['date_time'])
@@ -143,11 +139,11 @@ BEIJING = dict(url='https://archive.ics.uci.edu/static/public/381/beijing+pm2+5+
                member='PRSA_data_2010.1.1-2014.12.31.csv', folder='beijing')
 
 
-@register('beijing-temp', label='Temperature (°C)', components={'day': 5, 'year': 5}, **BEIJING)
+@register('beijing-temp', label='Temperature (°C)', **BEIJING)
 def read_beijing_temp(path):
     return read_beijing(path, 'TEMP')
 
 
-@register('beijing-pm25', label='PM2.5 (µg/m³)', components={'day': 5, 'week': 3, 'year': 4}, **BEIJING)
+@register('beijing-pm25', label='PM2.5 (µg/m³)', **BEIJING)
 def read_beijing_pm25(path):
     return read_beijing(path, 'pm2.5')

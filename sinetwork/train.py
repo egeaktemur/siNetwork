@@ -52,9 +52,9 @@ def main():
     parser.add_argument('--time-col', help='timestamp column of --csv')
     parser.add_argument('--target-col', help='target column of --csv')
     parser.add_argument('--sep', default=',', help='separator of --csv')
-    parser.add_argument('--components', nargs='+', metavar='PERIOD:COUNT',
-                        help="sinusoids per period, e.g. day:5 week:3 year:4 (period name or days); "
-                             "defaults to the dataset's")
+    parser.add_argument('--components', nargs='+', metavar='PERIOD:COUNT', default=['week:84', 'year:2'],
+                        help='sinusoids per period (period name or days); n sinusoids resolve the period '
+                             'to about period/2n, so the default is hourly over the week and seasonal over the year')
     parser.add_argument('--data-dir', type=Path, default=Path('data'))
     parser.add_argument('--epochs', type=int, default=500)
     parser.add_argument('--batch-size', type=int, default=256)
@@ -67,11 +67,10 @@ def main():
     if args.csv:
         if not (args.time_col and args.target_col):
             parser.error('--csv requires --time-col and --target-col')
-        dataset = csv_dataset(args.csv, args.time_col, args.target_col,
-                              parse_components(args.components or ['day:5', 'year:5']), args.sep)
+        dataset = csv_dataset(args.csv, args.time_col, args.target_col, args.sep)
     else:
         dataset = DATASETS[args.dataset]
-    components = parse_components(args.components) if args.components else dataset.components
+    components = parse_components(args.components)
 
     torch.manual_seed(args.seed)
 
