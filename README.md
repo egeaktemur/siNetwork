@@ -22,15 +22,15 @@ Fits a time series as a learned sum of sinusoids over periodic components (day, 
 
 ## Folders
 
-Data files are downloaded the first time a dataset is used, into one folder per source with the original file names. Plots go into one folder per dataset, with a subfolder per component setting so runs with different components don't overwrite each other. Both folders are not tracked in git.
+Each dataset is one CSV file, `data/<dataset>/<dataset>.csv`, downloaded the first time the dataset is used (the source's own separator and columns are kept; gzipped files are decompressed). Plots go into one folder per dataset, with a subfolder per component setting so runs with different components don't overwrite each other. Both folders are not tracked in git.
 
     data/
-      airquality/AirQualityUCI.csv
-      beijing/PRSA_data_2010.1.1-2014.12.31.csv     # shared by beijing-temp and beijing-pm25
-      bike/hour.csv
-      jena/jena_climate_2009_2016.csv
-      metro/Metro_Interstate_Traffic_Volume.csv.gz
-      power/household_power_consumption.txt
+      airquality/airquality.csv
+      beijing/beijing.csv                            # shared by beijing-temp and beijing-pm25
+      bike/bike.csv
+      jena/jena.csv
+      metro/metro.csv
+      power/power.csv
     plots/
       bike/
         data.png                                     # the raw series
@@ -65,14 +65,14 @@ Any CSV with a timestamp column and a numeric target column:
 
 `--sep` sets the separator (default `,`). Timestamps are parsed with `pandas.to_datetime`, so ISO format (`2024-01-31 13:00`) is safest.
 
-To add a dataset permanently, register a reader in [sinetwork/datasets.py](sinetwork/datasets.py). It takes the dataset's folder (`data/<name>/`) and returns a DataFrame with a `datetime` column and a numeric `y` column:
+To add a dataset permanently, register a reader in [sinetwork/datasets.py](sinetwork/datasets.py). It takes the path of the dataset's CSV and returns a DataFrame with a `datetime` column and a numeric `y` column:
 
 ```python
-@register('mydata', url='https://example.com/mydata.zip', files=('mydata.csv',),
+@register('mydata', url='https://example.com/mydata.zip', member='raw/mydata.csv',
           label='Load (kW)', components={'day': 6, 'week': 3, 'year': 4})
-def read_mydata(folder):
-    df = pd.read_csv(folder / 'mydata.csv', parse_dates=['timestamp'])
+def read_mydata(path):
+    df = pd.read_csv(path, parse_dates=['timestamp'])
     return df.rename(columns={'timestamp': 'datetime', 'load': 'y'})
 ```
 
-`files` are extracted from the zip at `url` into `data/mydata/` if missing (`url` is optional for files you place there yourself). Datasets read from the same files can share a folder with `folder='...'`. Missing values in `y` are dropped. The dataset then becomes available as `--dataset mydata`.
+If `data/mydata/mydata.csv` is missing, `member` is extracted to it from the zip at `url` (`url` and `member` are optional if you place the file there yourself). Datasets read from the same file can share it with `folder='...'`. Missing values in `y` are dropped. The dataset then becomes available as `--dataset mydata`.
