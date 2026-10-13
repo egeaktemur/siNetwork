@@ -42,7 +42,7 @@ Each dataset is one CSV file, `data/<dataset>/<dataset>.csv`, downloaded the fir
         week84-year2/                                # one folder per --components setting
           fit_epoch_0050.png                         # data and fitted waves over time, every --plot-every epochs
           components_epoch_0050.png                  # each component's sinusoids over one period
-          metrics.csv                                # loss and train/test RMSE every 10 epochs
+          metrics.csv                                # loss and train/test metrics every 10 epochs
 
 ## Usage
 
@@ -59,7 +59,7 @@ Options:
 - `--test-fraction` — final fraction of the time range held out for testing (default 0.2)
 - `--data-dir` (default `data`), `--plot-dir` (default `plots`), `--plot-every` (default 50)
 
-The target is standardized for training. Every 10 epochs the loss and the train/test RMSE (in the target's units) are printed and appended to `plots/<dataset>/<components>/metrics.csv`. Every `--plot-every` epochs and after the last one, two plots are saved to `plots/<dataset>/<components>/`: `fit_epoch_NNNN.png` (data and fitted waves over time) and `components_epoch_NNNN.png` (each component's sinusoids over one period).
+The target is standardized for training. Every 10 epochs the loss and, for train and test, the RMSE, MAE and bias (mean of prediction − data, all in the target's units) and R² are appended to `plots/<dataset>/<components>/metrics.csv`, and the test ones printed. A test bias far from 0 means the level drifts away, usually the trend extrapolating badly. R² is relative to the variance within each split, so a short test period has a low R² even for a good fit. Every `--plot-every` epochs and after the last one, two plots are saved to `plots/<dataset>/<components>/`: `fit_epoch_NNNN.png` (data and fitted waves over time) and `components_epoch_NNNN.png` (each component's sinusoids over one period).
 
 ## Using your own data
 

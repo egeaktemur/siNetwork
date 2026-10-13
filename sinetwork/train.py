@@ -11,21 +11,25 @@ from sinetwork.model import PERIODS, SinusoidalNetwork, parse_components
 from sinetwork.plot import plot_components, plot_fit, plot_series
 
 
-def evaluate_rmse(model, loader, scaling):
-    """Root mean squared error in the target's original units."""
+METRICS = ['rmse', 'mae', 'bias', 'r2']
+
+
+def evaluate(model, loader, scaling):
+    """RMSE, MAE and bias (mean of prediction - target) in the target's units, and R²."""
     model.eval()
-    squared_error, count = 0.0, 0
     with torch.no_grad():
-        for batch_inputs, batch_targets in loader:
-            squared_error += ((model(batch_inputs) - batch_targets) ** 2).sum().item()
-            count += len(batch_targets)
-    return (squared_error / count) ** 0.5 * scaling.y_std
+        predictions, targets = zip(*[(model(inputs), batch_targets) for inputs, batch_targets in loader])
+    error = torch.cat(predictions) - torch.cat(targets)
+    targets = torch.cat(targets)
+    mse = (error ** 2).mean().item()
+    return {'rmse': mse ** 0.5 * scaling.y_std, 'mae': error.abs().mean().item() * scaling.y_std,
+            'bias': error.mean().item() * scaling.y_std, 'r2': 1 - mse / targets.var(unbiased=False).item()}
 
 
 def train_model(model, dataset, train_df, test_df, scaling, train_loader, test_loader, criterion, optimizer,
                 plot_dir, num_epochs=1000, plot_every=50):
     metrics_path = plot_dir / 'metrics.csv'
-    metrics_path.write_text('epoch,loss,train_rmse,test_rmse\n')
+    metrics_path.write_text(','.join(['epoch', 'loss'] + [f'{split}_{m}' for split in ('train', 'test') for m in METRICS]) + '\n')
     for epoch in range(num_epochs):
         epoch_loss = 0
         model.train()
@@ -40,12 +44,12 @@ def train_model(model, dataset, train_df, test_df, scaling, train_loader, test_l
 
         if (epoch + 1) % 10 == 0:
             loss = epoch_loss / len(train_loader)
-            train_rmse = evaluate_rmse(model, train_loader, scaling)
-            test_rmse = evaluate_rmse(model, test_loader, scaling)
-            print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss:.4f}, '
-                  f'Train RMSE: {train_rmse:.4f}, Test RMSE: {test_rmse:.4f}')
+            train, test = evaluate(model, train_loader, scaling), evaluate(model, test_loader, scaling)
+            print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss:.4f}, Train RMSE: {train["rmse"]:.4f}, '
+                  f'Test RMSE: {test["rmse"]:.4f}, MAE: {test["mae"]:.4f}, Bias: {test["bias"]:+.4f}, '
+                  f'R²: {test["r2"]:.3f}')
             with open(metrics_path, 'a') as f:
-                f.write(f'{epoch+1},{loss:.6f},{train_rmse:.6f},{test_rmse:.6f}\n')
+                f.write(','.join([str(epoch + 1), f'{loss:.6f}'] + [f'{m[k]:.6f}' for m in (train, test) for k in METRICS]) + '\n')
         if (epoch + 1) % plot_every == 0 or epoch + 1 == num_epochs:
             plot_fit(model, train_df, test_df, scaling, dataset.label, plot_dir / f'fit_epoch_{epoch+1:04d}.png')
             plot_components(model, scaling, dataset.label, plot_dir / f'components_epoch_{epoch+1:04d}.png')
