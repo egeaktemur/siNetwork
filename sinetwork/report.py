@@ -130,11 +130,29 @@ def plot_window(ax, plot_dir, data, dataset, runs, start, end, title, ylabel):
     ax.scatter(window['datetime'], window['y'], s=9, color=MUTED, label='Data (test period)', zorder=3)
     for color, (label, run) in zip(SERIES, runs):
         ax.plot(hours, predict(plot_dir, dataset, run, hours), color=color, linewidth=2, label=label)
-    ax.set_title(title, color=INK, fontsize=10, loc='left')
+    ax.set_xlim(hours[0], hours[-1])
+    ax.set_title(title, color=INK, fontsize=10, loc='left', pad=22)
     ax.set_ylabel(ylabel, color=INK_2, fontsize=9)
     ax.xaxis.set_major_locator(matplotlib.dates.DayLocator(interval=max(1, (hours[-1] - hours[0]).days // 7)))
     ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%a %d' if len(hours) > 8 * 24 else '%a %d %b'))
-    ax.legend(frameon=False, fontsize=8, labelcolor=INK_2, loc='upper left')
+    ax.legend(frameon=False, fontsize=8, labelcolor=INK_2, loc='lower left', bbox_to_anchor=(0, 1.0), ncols=3,
+              borderaxespad=0.2)  # between the title and the plot, off the data
+    return window
+
+
+def plot_fit_example(plot_dir, data_dir, out_path, start='2017-08-11', end='2017-09-01'):
+    """Three ordinary weeks of metro's test period, chosen as the median three-week window by error."""
+    dataset, run = 'metro', VARIANTS[-1][1]('metro')
+    data = DATASETS[dataset].load(data_dir)
+    fig, ax = plt.subplots(figsize=(12, 4), facecolor=SURFACE)
+    window = plot_window(ax, plot_dir, data, dataset, [('Prediction, all options', run)], start, end, '', 'Cars per hour')
+    error = predict(plot_dir, dataset, run, window['datetime']) - window['y'].to_numpy()
+    test_rmse = json.loads((plot_dir / dataset / run / 'summary.json').read_text())['network']['test']['rmse']
+    ax.set_title(f'metro, three weeks of the test period, never seen in training: RMSE {np.sqrt(np.mean(error ** 2)):.0f} '
+                 f'cars per hour here, {test_rmse:.0f} over the whole test period', color=INK, fontsize=10, loc='left', pad=22)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=120, facecolor=SURFACE)
+    plt.close(fig)
 
 
 def plot_showcase(plot_dir, data_dir, out_path):
@@ -175,6 +193,7 @@ def main():
     summaries = load_summaries(args.plot_dir)
     print(markdown_table(summaries))
     plot_comparison(summaries, args.out_dir / 'comparison.png')
+    plot_fit_example(args.plot_dir, args.data_dir, args.out_dir / 'fit.png')
     plot_showcase(args.plot_dir, args.data_dir, args.out_dir / 'showcase.png')
     shutil.copy(args.plot_dir / 'metro' / 'week84-year2' / 'components_epoch_0500.png',
                 args.out_dir / 'metro_components.png')

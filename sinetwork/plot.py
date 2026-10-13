@@ -30,8 +30,8 @@ def plot_fit(model, train_df, test_df, scaling, label, out_path):
     ax.plot(all_datetimes, slow, label=f'Trend + {slowest.capitalize()} Sinusoidal Wave', color='red')
     ax.set_xlabel('Datetime')
     ax.set_ylabel(label)
-    ax.set_title(f'{label} and Sinusoidal Waves Over Time')
-    ax.legend()
+    ax.set_title(f'{label} and Sinusoidal Waves Over Time', loc='left')
+    ax.legend(loc='lower right', bbox_to_anchor=(1, 1), ncols=4, frameon=False)  # above the plot, off the data
     ax.grid(True)
 
     fig.tight_layout()
@@ -62,7 +62,6 @@ def plot_components(model, scaling, label, out_path):
         ax.plot(x, np.exp(waves.sum(axis=1)) if model.log_link else waves.sum(axis=1),
                 label=f'Sum of {name} Sinusoidal Waves', color='green')
         ax.set_title(f'Sum of {name} Sinusoidal Waves')
-        ax.legend()
 
         ax2 = fig.add_subplot(grid[row, 1])
         ax2.plot(x, waves, color='blue')
@@ -98,7 +97,6 @@ def plot_series(df, label, out_path):
     plt.xlabel('Time')
     plt.ylabel(label)
     plt.title(f'{label} over Time')
-    plt.legend()
     plt.grid(True)
     fig.savefig(out_path)
     plt.close(fig)

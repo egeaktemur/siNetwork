@@ -13,7 +13,11 @@ Each sinusoid has two coefficients (equivalently an amplitude and a phase), so n
 
 ## Results
 
-Test RMSE on the last 20% of each series, in the target's units (lower is better). Each column adds one option to the previous one:
+Every model is trained on the first 80% of each series and tested on the last 20%, which it never sees. Here is `metro` with all options, over three ordinary weeks of its test period (the median three-week window by error):
+
+![Three weeks of metro's test period, data and prediction](docs/fit.png)
+
+Test RMSE, in the target's units (lower is better). Each column adds one option to the previous one:
 
 | Dataset | First version | Least squares (base) | Base | + holidays | + seasonal modulation | + Poisson loss |
 |---|---|---|---|---|---|---|
