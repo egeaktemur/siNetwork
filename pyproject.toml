@@ -13,6 +13,7 @@ dependencies = [
 
 [project.scripts]
 train = "sinetwork.train:main"
+report = "sinetwork.report:main"
 
 [build-system]
 requires = ["setuptools"]
