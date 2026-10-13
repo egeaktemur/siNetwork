@@ -5,12 +5,25 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from sinetwork.data import load_data, make_loader
-from sinetwork.model import SinusoidalNetwork
-from sinetwork.plot import plot_correlation, plot_temperature, plot_waves
+from sinetwork.data import Scaling, make_loader, split
+from sinetwork.datasets import DATASETS, csv_dataset
+from sinetwork.model import SinusoidalNetwork, parse_components
+from sinetwork.plot import plot_series, plot_waves
 
 
-def train_model(model, df, train_loader, criterion, optimizer, plot_dir, num_epochs=1000):
+def evaluate_rmse(model, loader, scaling):
+    """Root mean squared error in the target's original units."""
+    model.eval()
+    squared_error, count = 0.0, 0
+    with torch.no_grad():
+        for batch_inputs, batch_targets in loader:
+            squared_error += ((model(batch_inputs) - batch_targets) ** 2).sum().item()
+            count += len(batch_targets)
+    return (squared_error / count) ** 0.5 * scaling.y_std
+
+
+def train_model(model, dataset, train_df, test_df, scaling, train_loader, test_loader, criterion, optimizer,
+                plot_dir, num_epochs=1000):
     for epoch in range(num_epochs):
         epoch_loss = 0
         model.train()
@@ -24,39 +37,64 @@ def train_model(model, df, train_loader, criterion, optimizer, plot_dir, num_epo
             epoch_loss += loss.item()
 
         if (epoch + 1) % 10 == 0:
-            print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {epoch_loss/len(train_loader):.4f}')
-            plot_waves(model, df, plot_dir / f'waves_epoch_{epoch+1:04d}.png')
+            print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {epoch_loss/len(train_loader):.4f}, '
+                  f'Train RMSE: {evaluate_rmse(model, train_loader, scaling):.4f}, '
+                  f'Test RMSE: {evaluate_rmse(model, test_loader, scaling):.4f}')
+            plot_waves(model, train_df, test_df, scaling, dataset.label, plot_dir / f'waves_epoch_{epoch+1:04d}.png')
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Fit a sum of sinusoids to AirQualityUCI temperature.')
-    parser.add_argument('--data', default='data/AirQualityUCI.csv')
+    parser = argparse.ArgumentParser(description='Fit a time series as a learned sum of sinusoids.')
+    parser.add_argument('--dataset', choices=sorted(DATASETS), default='airquality')
+    parser.add_argument('--csv', type=Path, help='fit a CSV file instead of a registered dataset')
+    parser.add_argument('--time-col', help='timestamp column of --csv')
+    parser.add_argument('--target-col', help='target column of --csv')
+    parser.add_argument('--sep', default=',', help='separator of --csv')
+    parser.add_argument('--components', nargs='+', metavar='PERIOD:COUNT',
+                        help="sinusoids per period, e.g. day:5 week:3 year:4 (period name or days); "
+                             "defaults to the dataset's")
+    parser.add_argument('--data-dir', type=Path, default=Path('data'))
     parser.add_argument('--epochs', type=int, default=500)
+    parser.add_argument('--batch-size', type=int, default=32)
+    parser.add_argument('--test-fraction', type=float, default=0.2, help='final fraction of the time range held out')
     parser.add_argument('--plot-dir', type=Path, default=Path('plots'))
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
+
+    if args.csv:
+        if not (args.time_col and args.target_col):
+            parser.error('--csv requires --time-col and --target-col')
+        dataset = csv_dataset(args.csv, args.time_col, args.target_col,
+                              parse_components(args.components or ['day:5', 'year:5']), args.sep)
+    else:
+        dataset = DATASETS[args.dataset]
+    components = parse_components(args.components) if args.components else dataset.components
 
     torch.manual_seed(args.seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    df = load_data(args.data)
+    df = dataset.load(args.data_dir)
     print(df.describe())
 
-    args.plot_dir.mkdir(parents=True, exist_ok=True)
-    plot_correlation(df, args.plot_dir / 'correlation.png')
-    plot_temperature(df, args.plot_dir / 'temperature.png')
+    plot_dir = args.plot_dir / dataset.name
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    plot_series(df, dataset.label, plot_dir / 'series.png')
 
-    train_loader = make_loader(df, device)
+    train_df, test_df = split(df, args.test_fraction)
+    scaling = Scaling.fit(train_df)
+    train_loader = make_loader(train_df, scaling, device, args.batch_size)
+    test_loader = make_loader(test_df, scaling, device, args.batch_size, shuffle=False)
 
-    model = SinusoidalNetwork(64, 128, 256, 128).to(device)
+    model = SinusoidalNetwork(components, span=scaling.days([train_df['datetime'].max()])[0]).to(device)
 
     # Define loss function and optimizer
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-    train_model(model, df, train_loader, criterion, optimizer, args.plot_dir, args.epochs)
+    train_model(model, dataset, train_df, test_df, scaling, train_loader, test_loader, criterion, optimizer,
+                plot_dir, args.epochs)
 
     print("Training complete.")
 

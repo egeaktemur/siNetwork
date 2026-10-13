@@ -3,99 +3,88 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import torch
 
+from sinetwork.model import period_days
 
-def plot_waves(model, df, out_path):
+
+def plot_waves(model, train_df, test_df, scaling, label, out_path):
     device = next(model.parameters()).device
+    components = model.components
+    slowest = max(components, key=period_days)
 
-    # Generate an array of hours and days
-    all_datetimes = pd.date_range(start=df['datetime'].min(), end=df['datetime'].max(), freq='h')
-    all_days = all_datetimes.dayofyear.values.reshape(-1, 1)
-    all_hours = all_datetimes.hour.values.reshape(-1, 1)
+    # Hourly grid over the whole data range
+    all_datetimes = pd.date_range(start=train_df['datetime'].min(), end=test_df['datetime'].max(), freq='h')
+    all_t = torch.tensor(scaling.days(all_datetimes), dtype=torch.float32).to(device)
 
-    hours = np.arange(24).reshape(-1, 1)
-    days = np.arange(1, 366).reshape(-1, 1)  # Assuming 365 days for simplicity
-
-    # Convert numpy arrays to PyTorch tensors
-    hours_tensor = torch.tensor(hours).float().to(device)
-    days_tensor = torch.tensor(days).float().to(device)
-
-    # Calculate sinusoidal values
     with torch.no_grad():
-        a_day, b_day, c_day, a_hour, b_hour, c_hour = model.get_sinusoidal_wave()
-        sinusoidal_values_hour = (a_hour * torch.sin(b_hour * hours_tensor + c_hour)).cpu().numpy()
-        sinusoidal_values_day = (a_day * torch.sin(b_day * days_tensor + c_day)).cpu().numpy()
-        sinusoidal_sum_day = (a_day * torch.sin(b_day * torch.tensor(all_days).to(device) + c_day)).sum(1).cpu().numpy()
-        sinusoidal_sum_hour = (a_hour * torch.sin(b_hour * torch.tensor(all_hours).to(device) + c_hour)).sum(1).cpu().numpy()
-        total_sinusoidal = sinusoidal_sum_day + sinusoidal_sum_hour
+        _, _, _, offset, slope = model.get_params()
+        total = scaling.unscale(model(all_t).cpu().numpy())
+        slow = offset + slope * all_t / model.span + model.waves(all_t)[slowest].sum(1)
+        slow = scaling.unscale(slow.cpu().numpy())
 
-    fig = plt.figure(figsize=(40, 20))
-    grid = fig.add_gridspec(3, 2, height_ratios=[2, 1, 1])
+    fig = plt.figure(figsize=(40, 5 * (len(components) + 2)))
+    grid = fig.add_gridspec(len(components) + 1, 2, height_ratios=[2] + [1] * len(components))
 
-    # Temperature and sinusoidal values spanning the top row
+    # Data and fitted waves spanning the top row
     ax_big = fig.add_subplot(grid[0, :])
-    ax_big.scatter(df['datetime'], df['T'], label='Temperature (T)', s=10, color='blue')
-    ax_big.plot(all_datetimes, total_sinusoidal, label='Total Sinusoidal Wave', color='orange')
-    ax_big.plot(all_datetimes, sinusoidal_sum_day, label='Day Sinusoidal Wave', color='red')
+    ax_big.scatter(train_df['datetime'], train_df['y'], label=f'{label} (train)', s=10, color='blue')
+    ax_big.scatter(test_df['datetime'], test_df['y'], label=f'{label} (test)', s=10, color='gray')
+    ax_big.plot(all_datetimes, total, label='Total Sinusoidal Wave', color='orange')
+    ax_big.plot(all_datetimes, slow, label=f'Trend + {slowest.capitalize()} Sinusoidal Wave', color='red')
     ax_big.set_xlabel('Datetime')
-    ax_big.set_ylabel('Value')
-    ax_big.set_title('Temperature and Sinusoidal Waves Over Time')
+    ax_big.set_ylabel(label)
+    ax_big.set_title(f'{label} and Sinusoidal Waves Over Time')
     ax_big.legend()
     ax_big.grid(True)
 
-    # Hourly sinusoidal wave plots
-    ax = fig.add_subplot(grid[1, 0])
-    ax.plot(hours.flatten(), sinusoidal_values_hour.sum(axis=1), label='Sum of Hourly Sinusoidal Waves', color='green')
-    ax.set_title('Sum of Hourly Sinusoidal Waves')
-    ax.set_xlabel('Hour of Day')
-    ax.set_ylabel('Sinusoidal Value')
-    ax.legend()
-    ax.grid(True)
+    # One row per component, over its first period
+    for row, period in enumerate(components, start=1):
+        days = np.linspace(0, period_days(period), 500)
+        with torch.no_grad():
+            waves = model.waves(torch.tensor(days, dtype=torch.float32).to(device))[period]
+            waves = (waves * scaling.y_std).cpu().numpy()
+        x, xlabel = period_axis(period, days)
+        name = period.capitalize()
 
-    ax = fig.add_subplot(grid[1, 1])
-    ax.plot(hours.flatten(), sinusoidal_values_hour, color='blue')
-    ax.set_title('Hourly Sinusoidal Waves')
-    ax.set_xlabel('Hour of Day')
-    ax.set_ylabel('Sinusoidal Value')
-    ax.grid(True)
+        ax = fig.add_subplot(grid[row, 0])
+        ax.plot(x, waves.sum(axis=1), label=f'Sum of {name} Sinusoidal Waves', color='green')
+        ax.set_title(f'Sum of {name} Sinusoidal Waves')
+        ax.legend()
 
-    # Daily sinusoidal wave plots
-    ax = fig.add_subplot(grid[2, 0])
-    ax.plot(days.flatten(), sinusoidal_values_day.sum(axis=1), label='Sum of Daily Sinusoidal Waves', color='purple')
-    ax.set_title('Sum of Daily Sinusoidal Waves')
-    ax.set_xlabel('Day of Year')
-    ax.set_ylabel('Sinusoidal Value')
-    ax.legend()
-    ax.grid(True)
+        ax2 = fig.add_subplot(grid[row, 1])
+        ax2.plot(x, waves, color='blue')
+        ax2.set_title(f'{name} Sinusoidal Waves')
 
-    ax = fig.add_subplot(grid[2, 1])
-    ax.plot(days.flatten(), sinusoidal_values_day, color='red')
-    ax.set_title('Daily Sinusoidal Waves')
-    ax.set_xlabel('Day of Year')
-    ax.set_ylabel('Sinusoidal Value')
-    ax.grid(True)
+        for a in (ax, ax2):
+            a.set_xlabel(xlabel)
+            a.set_ylabel(label)
+            a.grid(True)
+            if period == 'week':
+                a.set_xticks(range(7), [(scaling.t0 + pd.Timedelta(days=d)).day_name() for d in range(7)])
 
     fig.tight_layout()
     fig.savefig(out_path)
     plt.close(fig)
 
 
-def plot_correlation(df, out_path):
-    fig = plt.figure()
-    sns.heatmap(df.corr(numeric_only=True))
-    fig.savefig(out_path)
-    plt.close(fig)
+def period_axis(period, days):
+    """x values and axis label for plotting one period of a component."""
+    if period == 'day':
+        return days * 24, 'Hour of Day'
+    if period == 'year':
+        return days + 1, 'Day of Year'
+    if period_days(period) < 2:
+        return days * 24, 'Hours'
+    return days, 'Days'
 
 
-def plot_temperature(df, out_path):
-    # Plot temperature over time
+def plot_series(df, label, out_path):
     fig = plt.figure(figsize=(12, 6))
-    plt.plot(df['datetime'], df['T'], label='Temperature (T)')
+    plt.plot(df['datetime'], df['y'], label=label)
     plt.xlabel('Time')
-    plt.ylabel('Temperature (T)')
-    plt.title('Temperature over Time')
+    plt.ylabel(label)
+    plt.title(f'{label} over Time')
     plt.legend()
     plt.grid(True)
     fig.savefig(out_path)

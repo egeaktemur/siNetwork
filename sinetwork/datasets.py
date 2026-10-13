@@ -1,0 +1,92 @@
+"""Dataset registry.
+
+A dataset is a reader function that takes the data directory and returns a
+DataFrame with a `datetime` column and a float target column `y`. Register it
+with `@register(...)`, giving the archive to download its files from and the
+periodic components it is fit with by default:
+
+    @register('mydata', url='https://example.com/mydata.zip', files=('mydata.csv',),
+              label='Load (kW)', components={'day': 6, 'week': 3, 'year': 4})
+    def read_mydata(data_dir):
+        df = pd.read_csv(data_dir / 'mydata.csv', parse_dates=['timestamp'])
+        return df.rename(columns={'timestamp': 'datetime', 'load': 'y'})
+
+Any other CSV can be used without registering it, see `csv_dataset`.
+"""
+import shutil
+import tempfile
+import urllib.request
+import zipfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable, Optional
+
+import pandas as pd
+
+
+@dataclass(frozen=True)
+class Dataset:
+    name: str
+    read: Callable[[Path], pd.DataFrame]  # data_dir -> DataFrame with `datetime` and `y`
+    files: tuple  # files in data_dir that `read` needs
+    label: str  # name of the target, used in plots
+    components: dict  # default {period: sinusoid count}, see model.PERIODS
+    url: Optional[str] = None  # zip archive containing `files`
+
+    def load(self, data_dir='data'):
+        data_dir = Path(data_dir)
+        missing = [f for f in self.files if not (data_dir / f).exists()]
+        if missing:
+            if self.url is None:
+                raise FileNotFoundError(f'{self.name}: missing {missing} in {data_dir}')
+            download(self.url, missing, data_dir)
+        df = self.read(data_dir)
+        df = df[['datetime', 'y']].dropna()
+        return df.astype({'y': float}).sort_values('datetime').reset_index(drop=True)
+
+
+DATASETS = {}
+
+
+def register(name, **kwargs):
+    def decorator(read):
+        DATASETS[name] = Dataset(name=name, read=read, **kwargs)
+        return read
+    return decorator
+
+
+def download(url, members, data_dir):
+    """Download the zip archive at `url` and extract `members` into `data_dir`."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    print(f'Downloading {url}')
+    with tempfile.TemporaryFile() as tmp:
+        with urllib.request.urlopen(url) as response:
+            shutil.copyfileobj(response, tmp)
+        with zipfile.ZipFile(tmp) as archive:
+            for member in members:
+                with archive.open(member) as src, open(data_dir / member, 'wb') as dst:
+                    shutil.copyfileobj(src, dst)
+
+
+def csv_dataset(path, time_col, target_col, components, sep=','):
+    """A dataset read from an arbitrary CSV file with a timestamp and a target column."""
+    path = Path(path)
+
+    def read(data_dir):
+        df = pd.read_csv(path, sep=sep, usecols=[time_col, target_col])
+        df['datetime'] = pd.to_datetime(df[time_col])
+        df['y'] = pd.to_numeric(df[target_col], errors='coerce')
+        return df
+
+    return Dataset(name=path.stem, read=read, files=(), label=target_col, components=components)
+
+
+@register('airquality', url='https://archive.ics.uci.edu/static/public/360/air+quality.zip',
+          files=('AirQualityUCI.csv',), label='Temperature (°C)', components={'day': 5, 'year': 5})
+def read_airquality(data_dir):
+    df = pd.read_csv(data_dir / 'AirQualityUCI.csv', sep=';', decimal=',')
+    df.columns = [col.strip() for col in df.columns]
+    df = df.dropna(subset=['Date', 'Time'])
+    df['datetime'] = pd.to_datetime(df['Date'] + ' ' + df['Time'], format='%d/%m/%Y %H.%M.%S')
+    df['y'] = df['T']
+    return df[df['y'] != -200]  # -200 marks a missing reading
