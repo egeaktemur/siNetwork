@@ -90,3 +90,32 @@ def read_airquality(data_dir):
     df['datetime'] = pd.to_datetime(df['Date'] + ' ' + df['Time'], format='%d/%m/%Y %H.%M.%S')
     df['y'] = df['T']
     return df[df['y'] != -200]  # -200 marks a missing reading
+
+
+@register('jena', url='https://storage.googleapis.com/tensorflow/tf-keras-datasets/jena_climate_2009_2016.csv.zip',
+          files=('jena_climate_2009_2016.csv',), label='Temperature (°C)', components={'day': 5, 'year': 5})
+def read_jena(data_dir):
+    df = pd.read_csv(data_dir / 'jena_climate_2009_2016.csv', usecols=['Date Time', 'T (degC)'])
+    df['datetime'] = pd.to_datetime(df['Date Time'], format='%d.%m.%Y %H:%M:%S')
+    # 10-minute readings, averaged to hourly
+    return df.set_index('datetime')['T (degC)'].resample('h').mean().rename('y').reset_index()
+
+
+@register('bike', url='https://archive.ics.uci.edu/static/public/275/bike+sharing+dataset.zip',
+          files=('hour.csv',), label='Bike rentals per hour', components={'day': 6, 'week': 3, 'year': 3})
+def read_bike(data_dir):
+    df = pd.read_csv(data_dir / 'hour.csv')
+    df['datetime'] = pd.to_datetime(df['dteday']) + pd.to_timedelta(df['hr'], unit='h')
+    df['y'] = df['cnt']
+    return df
+
+
+@register('power', url='https://archive.ics.uci.edu/static/public/235/individual+household+electric+power+consumption.zip',
+          files=('household_power_consumption.txt',), label='Global active power (kW)',
+          components={'day': 6, 'week': 3, 'year': 4})
+def read_power(data_dir):
+    df = pd.read_csv(data_dir / 'household_power_consumption.txt', sep=';', na_values='?',
+                     usecols=['Date', 'Time', 'Global_active_power'])
+    df['datetime'] = pd.to_datetime(df['Date'] + ' ' + df['Time'], format='%d/%m/%Y %H:%M:%S')
+    # 1-minute readings, averaged to hourly
+    return df.set_index('datetime')['Global_active_power'].resample('h').mean().rename('y').reset_index()
