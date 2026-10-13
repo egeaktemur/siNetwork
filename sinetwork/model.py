@@ -24,10 +24,9 @@ class SinusoidalNetwork(nn.Module):
     """Predicts y(t) = offset + slope·t/span + Σ a·sin(b·t + c) over periodic components.
 
     t is time in days and span is the length of the training range in days. A
-    component with period P and n sinusoids starts its frequencies at the
-    harmonics 2πk/P, k = 1..n, and learns a deviation from them measured in
-    cycles over the span. The parameters (amplitude a, frequency b, phase c,
-    offset, slope) are produced by an MLP fed a constant input.
+    component with period P and n sinusoids has its frequencies fixed at the
+    harmonics 2πk/P, k = 1..n. The parameters (amplitude a, phase c, offset,
+    slope) are produced by an MLP fed a constant input.
     """
 
     def __init__(self, components, span, input_size=64, hidden_size1=128, hidden_size2=256):
@@ -39,7 +38,7 @@ class SinusoidalNetwork(nn.Module):
         self.register_buffer('harmonics', torch.tensor(harmonics))
         self.fc1 = nn.Linear(input_size, hidden_size1)
         self.fc2 = nn.Linear(hidden_size1, hidden_size2)
-        self.fc3 = nn.Linear(hidden_size2, 3 * len(harmonics) + 2)
+        self.fc3 = nn.Linear(hidden_size2, 2 * len(harmonics) + 2)
 
     def forward(self, t):
         a, b, c, offset, slope = self.get_params()
@@ -50,10 +49,9 @@ class SinusoidalNetwork(nn.Module):
         x = torch.relu(self.fc2(x))
         x = self.fc3(x)
         n = len(self.harmonics)
-        a, b_deviation, c = x[:3 * n].view(3, n)
-        b = self.harmonics + 2 * math.pi * b_deviation / self.span
-        offset, slope = x[3 * n:]
-        return a, b, c, offset, slope
+        a, c = x[:2 * n].view(2, n)
+        offset, slope = x[2 * n:]
+        return a, self.harmonics, c, offset, slope
 
     def waves(self, t):
         """Each sinusoid evaluated at t, as {period: tensor of shape (len(t), count)}."""

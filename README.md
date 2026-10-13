@@ -4,7 +4,7 @@ Fits a time series as a learned sum of sinusoids over periodic components (day, 
 
     y(t) = offset + slope·t/span + Σ_components Σ_k a_k·sin(b_k·t + c_k)
 
-`t` is time in days. A component with period P and n sinusoids starts its frequencies at the harmonics 2πk/P (k = 1..n) and learns a deviation from them. The amplitudes, frequencies, phases, offset and slope are output by an MLP fed a constant input.
+`t` is time in days. A component with period P and n sinusoids has its frequencies fixed at the harmonics 2πk/P (k = 1..n). The amplitudes, phases, offset and slope are output by an MLP fed a constant input.
 
 Each sinusoid has an amplitude and a phase, so n sinusoids give a component 2n free numbers: it can follow a shape with about one value per P/2n. The default, `week:84 year:2`, is:
 
