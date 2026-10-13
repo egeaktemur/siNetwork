@@ -7,15 +7,17 @@ from torch.utils.data import BatchSampler, DataLoader, RandomSampler, Sequential
 
 @dataclass
 class Scaling:
-    """Maps datetimes to days since t0 and standardizes the target."""
+    """Maps datetimes to days since t0 and standardizes the target, or divides it by its mean if not centered."""
     t0: pd.Timestamp
     y_mean: float
     y_std: float
 
     @classmethod
-    def fit(cls, df):
+    def fit(cls, df, center=True):
         # Start of the first year, so day and year components line up with hour of day and day of year
         t0 = pd.Timestamp(year=df['datetime'].min().year, month=1, day=1)
+        if not center:  # keeps the target non-negative, for the Poisson loss
+            return cls(t0, 0.0, df['y'].mean())
         return cls(t0, df['y'].mean(), df['y'].std())
 
     def days(self, datetimes):

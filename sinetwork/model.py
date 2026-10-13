@@ -31,10 +31,11 @@ class SinusoidalNetwork(nn.Module):
     amplitude and phase, it makes the squared error convex in α and β.
     """
 
-    def __init__(self, components, span, input_size=64, hidden_size1=128, hidden_size2=256):
+    def __init__(self, components, span, log_link=False, input_size=64, hidden_size1=128, hidden_size2=256):
         super(SinusoidalNetwork, self).__init__()
         self.components = dict(components)
         self.span = span
+        self.log_link = log_link  # predict exp(sum): the components multiply instead of adding up
         harmonics = [2 * math.pi * k / period_days(period)
                      for period, count in self.components.items() for k in range(1, count + 1)]
         self.register_buffer('harmonics', torch.tensor(harmonics))
@@ -44,7 +45,8 @@ class SinusoidalNetwork(nn.Module):
 
     def forward(self, t):
         _, _, offset, slope = self.get_params()
-        return offset + slope * t / self.span + self.sinusoids(t).sum(dim=1)
+        y = offset + slope * t / self.span + self.sinusoids(t).sum(dim=1)
+        return y.exp() if self.log_link else y
 
     def get_params(self):
         x = torch.relu(self.fc1(torch.ones(self.fc1.in_features, device=self.fc1.weight.device)))

@@ -69,6 +69,8 @@ def main():
     parser.add_argument('--epochs', type=int, default=500)
     parser.add_argument('--batch-size', type=int, help='default: the whole training set in one batch')
     parser.add_argument('--lr', type=float, default=0.001)
+    parser.add_argument('--loss', choices=['mse', 'poisson'], default='mse',
+                        help='poisson predicts exp(sum of sinusoids), for non-negative targets such as counts')
     parser.add_argument('--test-fraction', type=float, default=0.2, help='final fraction of the time range held out')
     parser.add_argument('--plot-dir', type=Path, default=Path('plots'))
     parser.add_argument('--plot-every', type=int, default=50, help='save plots every N epochs and after the last')
@@ -90,23 +92,28 @@ def main():
 
     df = dataset.load(args.data_dir)
     print(df.describe())
+    if args.loss == 'poisson' and (df['y'] < 0).any():
+        parser.error(f'--loss poisson needs a non-negative target, {dataset.name} has values down to {df["y"].min()}')
 
     # plots/<dataset>/data.png, and one folder of fits per component setting, e.g. plots/bike/day6-week3-year3/
     dataset_plot_dir = args.plot_dir / dataset.name
     run_name = '-'.join(f'{period if period in PERIODS else period + "d"}{count}' for period, count in components.items())
+    if args.loss != 'mse':
+        run_name += f'-{args.loss}'
     plot_dir = dataset_plot_dir / run_name
     plot_dir.mkdir(parents=True, exist_ok=True)
     plot_series(df, dataset.label, dataset_plot_dir / 'data.png')
 
     train_df, test_df = split(df, args.test_fraction)
-    scaling = Scaling.fit(train_df)
+    scaling = Scaling.fit(train_df, center=args.loss == 'mse')
     train_loader = make_loader(train_df, scaling, device, args.batch_size)
     test_loader = make_loader(test_df, scaling, device, args.batch_size, shuffle=False)
 
-    model = SinusoidalNetwork(components, span=scaling.days([train_df['datetime'].max()])[0]).to(device)
+    model = SinusoidalNetwork(components, span=scaling.days([train_df['datetime'].max()])[0],
+                              log_link=args.loss == 'poisson').to(device)
 
     # Define loss function and optimizer
-    criterion = nn.MSELoss()
+    criterion = nn.MSELoss() if args.loss == 'mse' else nn.PoissonNLLLoss(log_input=False)
     optimizer = optim.Adam(model.parameters(), lr=args.lr, fused=True)
 
     train_model(model, dataset, train_df, test_df, scaling, train_loader, test_loader, criterion, optimizer,

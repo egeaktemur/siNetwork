@@ -21,7 +21,7 @@ def plot_fit(model, train_df, test_df, scaling, label, out_path):
         _, _, offset, slope = model.get_params()
         total = scaling.unscale(model(all_t).cpu().numpy())
         slow = offset + slope * all_t / model.span + model.waves(all_t)[slowest].sum(1)
-        slow = scaling.unscale(slow.cpu().numpy())
+        slow = scaling.unscale((slow.exp() if model.log_link else slow).cpu().numpy())
 
     fig, ax = plt.subplots(figsize=(20, 7))
     ax.scatter(train_df['datetime'], train_df['y'], label=f'{label} (train)', s=4, color='blue')
@@ -40,7 +40,10 @@ def plot_fit(model, train_df, test_df, scaling, label, out_path):
 
 
 def plot_components(model, scaling, label, out_path):
-    """One row per component over its first period: the sum of its sinusoids and each sinusoid."""
+    """One row per component over its first period: the sum of its sinusoids and each sinusoid.
+
+    With a log link the sinusoids are in log units, and their sum is shown as the factor exp(sum).
+    """
     device = next(model.parameters()).device
     components = model.components
     fig = plt.figure(figsize=(16, 4 * len(components)))
@@ -50,12 +53,13 @@ def plot_components(model, scaling, label, out_path):
         days = np.linspace(0, period_days(period), 500)
         with torch.no_grad():
             waves = model.waves(torch.tensor(days, dtype=torch.float32).to(device))[period]
-            waves = (waves * scaling.y_std).cpu().numpy()
+            waves = waves.cpu().numpy() if model.log_link else (waves * scaling.y_std).cpu().numpy()
         x, xlabel = period_axis(period, days)
         name = period.capitalize()
 
         ax = fig.add_subplot(grid[row, 0])
-        ax.plot(x, waves.sum(axis=1), label=f'Sum of {name} Sinusoidal Waves', color='green')
+        ax.plot(x, np.exp(waves.sum(axis=1)) if model.log_link else waves.sum(axis=1),
+                label=f'Sum of {name} Sinusoidal Waves', color='green')
         ax.set_title(f'Sum of {name} Sinusoidal Waves')
         ax.legend()
 
@@ -63,9 +67,10 @@ def plot_components(model, scaling, label, out_path):
         ax2.plot(x, waves, color='blue')
         ax2.set_title(f'{name} Sinusoidal Waves')
 
+        ax.set_ylabel(f'Factor on {label}' if model.log_link else label)
+        ax2.set_ylabel(f'Log factor on {label}' if model.log_link else label)
         for a in (ax, ax2):
             a.set_xlabel(xlabel)
-            a.set_ylabel(label)
             a.grid(True)
             if period == 'week':
                 a.set_xticks(range(7), [(scaling.t0 + pd.Timedelta(days=d)).day_name() for d in range(7)])
