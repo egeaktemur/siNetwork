@@ -82,4 +82,4 @@ def read_mydata(path):
     return df.rename(columns={'timestamp': 'datetime', 'load': 'y'})
 ```
 
-If `data/mydata/mydata.csv` is missing, `member` is extracted to it from the zip at `url` (`url` and `member` are optional if you place the file there yourself). Datasets read from the same file can share it with `folder='...'`. Missing values in `y` are dropped. The dataset then becomes available as `--dataset mydata`.
+If `data/mydata/mydata.csv` is missing, `member` is extracted to it from the zip at `url` (`url` and `member` are optional if you place the file there yourself). Datasets read from the same file can share it with `folder='...'`. Missing values in `y` are dropped. `holidays=('US', 'NY')` (country and subdivision, or `None`) gives the calendar used by `--holidays`. The dataset then becomes available as `--dataset mydata`.
