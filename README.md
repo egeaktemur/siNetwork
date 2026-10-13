@@ -55,7 +55,7 @@ Options:
 
 - `--dataset` — one of the datasets above (default `airquality`)
 - `--components` — sinusoids per period (default `week:84 year:2`, see above). A period is `day`, `week`, `year` or a number of days (`0.5:2` for a 12-hour cycle).
-- `--epochs` (default 500), `--batch-size` (default 256), `--seed` (default 0)
+- `--epochs` (default 500), `--batch-size` (default: the whole training set), `--lr` (default 0.001), `--seed` (default 0)
 - `--test-fraction` — final fraction of the time range held out for testing (default 0.2)
 - `--data-dir` (default `data`), `--plot-dir` (default `plots`), `--plot-every` (default 50)
 

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 import torch
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import BatchSampler, DataLoader, RandomSampler, SequentialSampler, TensorDataset
 
 
 @dataclass
@@ -32,7 +32,10 @@ def split(df, test_fraction):
     return df[df['datetime'] <= cutoff], df[df['datetime'] > cutoff]
 
 
-def make_loader(df, scaling, device, batch_size=32, shuffle=True):
+def make_loader(df, scaling, device, batch_size=None, shuffle=True):
     t = torch.tensor(scaling.days(df['datetime']), dtype=torch.float32).to(device)
     y = torch.tensor(((df['y'] - scaling.y_mean) / scaling.y_std).values, dtype=torch.float32).to(device)
-    return DataLoader(TensorDataset(t, y), batch_size=batch_size, shuffle=shuffle)
+    dataset = TensorDataset(t, y)
+    # Index whole batches at once rather than stacking single samples, which is far faster for tensors on the GPU
+    sampler = RandomSampler(dataset) if shuffle else SequentialSampler(dataset)
+    return DataLoader(dataset, sampler=BatchSampler(sampler, batch_size or len(dataset), drop_last=False), batch_size=None)

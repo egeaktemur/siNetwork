@@ -63,7 +63,8 @@ def main():
                              'to about period/2n, so the default is hourly over the week and seasonal over the year')
     parser.add_argument('--data-dir', type=Path, default=Path('data'))
     parser.add_argument('--epochs', type=int, default=500)
-    parser.add_argument('--batch-size', type=int, default=256)
+    parser.add_argument('--batch-size', type=int, help='default: the whole training set in one batch')
+    parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--test-fraction', type=float, default=0.2, help='final fraction of the time range held out')
     parser.add_argument('--plot-dir', type=Path, default=Path('plots'))
     parser.add_argument('--plot-every', type=int, default=50, help='save plots every N epochs and after the last')
@@ -102,7 +103,7 @@ def main():
 
     # Define loss function and optimizer
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001, fused=True)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr, fused=True)
 
     train_model(model, dataset, train_df, test_df, scaling, train_loader, test_loader, criterion, optimizer,
                 plot_dir, args.epochs, args.plot_every)
