@@ -24,6 +24,8 @@ def evaluate_rmse(model, loader, scaling):
 
 def train_model(model, dataset, train_df, test_df, scaling, train_loader, test_loader, criterion, optimizer,
                 plot_dir, num_epochs=1000, plot_every=50):
+    metrics_path = plot_dir / 'metrics.csv'
+    metrics_path.write_text('epoch,loss,train_rmse,test_rmse\n')
     for epoch in range(num_epochs):
         epoch_loss = 0
         model.train()
@@ -37,9 +39,13 @@ def train_model(model, dataset, train_df, test_df, scaling, train_loader, test_l
             epoch_loss += loss.item()
 
         if (epoch + 1) % 10 == 0:
-            print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {epoch_loss/len(train_loader):.4f}, '
-                  f'Train RMSE: {evaluate_rmse(model, train_loader, scaling):.4f}, '
-                  f'Test RMSE: {evaluate_rmse(model, test_loader, scaling):.4f}')
+            loss = epoch_loss / len(train_loader)
+            train_rmse = evaluate_rmse(model, train_loader, scaling)
+            test_rmse = evaluate_rmse(model, test_loader, scaling)
+            print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss:.4f}, '
+                  f'Train RMSE: {train_rmse:.4f}, Test RMSE: {test_rmse:.4f}')
+            with open(metrics_path, 'a') as f:
+                f.write(f'{epoch+1},{loss:.6f},{train_rmse:.6f},{test_rmse:.6f}\n')
         if (epoch + 1) % plot_every == 0 or epoch + 1 == num_epochs:
             plot_fit(model, train_df, test_df, scaling, dataset.label, plot_dir / f'fit_epoch_{epoch+1:04d}.png')
             plot_components(model, scaling, dataset.label, plot_dir / f'components_epoch_{epoch+1:04d}.png')
