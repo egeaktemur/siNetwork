@@ -55,7 +55,7 @@ def main():
                              "defaults to the dataset's")
     parser.add_argument('--data-dir', type=Path, default=Path('data'))
     parser.add_argument('--epochs', type=int, default=500)
-    parser.add_argument('--batch-size', type=int, default=32)
+    parser.add_argument('--batch-size', type=int, default=256)
     parser.add_argument('--test-fraction', type=float, default=0.2, help='final fraction of the time range held out')
     parser.add_argument('--plot-dir', type=Path, default=Path('plots'))
     parser.add_argument('--seed', type=int, default=0)
@@ -94,7 +94,7 @@ def main():
 
     # Define loss function and optimizer
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=0.001, fused=True)
 
     train_model(model, dataset, train_df, test_df, scaling, train_loader, test_loader, criterion, optimizer,
                 plot_dir, args.epochs)

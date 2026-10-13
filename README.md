@@ -49,13 +49,11 @@ Options:
 
 - `--dataset` — one of the datasets above (default `airquality`)
 - `--components` — sinusoids per period, e.g. `--components day:5 week:3 year:4`. A period is `day`, `week`, `year` or a number of days (`0.5:2` for a 12-hour cycle). Defaults to the dataset's.
-- `--epochs` (default 500), `--batch-size` (default 32), `--seed` (default 0)
+- `--epochs` (default 500), `--batch-size` (default 256), `--seed` (default 0)
 - `--test-fraction` — final fraction of the time range held out for testing (default 0.2)
 - `--data-dir` (default `data`), `--plot-dir` (default `plots`)
 
 The target is standardized for training. Every 10 epochs the loss and the train/test RMSE (in the target's units) are printed and a plot of the fitted waves is saved to `plots/<dataset>/<components>/fit_epoch_NNNN.png`.
-
-For the larger datasets (`jena`, `power`, `metro`, `beijing-*`) a bigger batch, e.g. `--batch-size 256`, keeps epochs short.
 
 ## Using your own data
 
