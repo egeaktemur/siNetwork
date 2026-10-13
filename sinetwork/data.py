@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+import holidays
+import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import BatchSampler, DataLoader, RandomSampler, SequentialSampler, TensorDataset
@@ -25,6 +27,15 @@ class Scaling:
 
     def unscale(self, y):
         return y * self.y_std + self.y_mean
+
+
+def holiday_of_day(scaling, end, country, subdivision=None):
+    """For each day from t0 to `end`, the 1-based index of its holiday (numbered by name) or 0."""
+    dates = pd.date_range(scaling.t0, end, freq='D')
+    calendar = holidays.country_holidays(country, subdiv=subdivision, years=range(dates[0].year, dates[-1].year + 1))
+    names = [calendar.get(date) for date in dates]
+    index = {name: i + 1 for i, name in enumerate(sorted({name for name in names if name}))}
+    return np.array([index.get(name, 0) for name in names])
 
 
 def split(df, test_fraction):

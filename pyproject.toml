@@ -8,6 +8,7 @@ dependencies = [
     "pandas",
     "numpy",
     "matplotlib",
+    "holidays>=0.106",
 ]
 
 [project.scripts]

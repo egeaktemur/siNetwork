@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from sinetwork.data import Scaling, make_loader, split
+from sinetwork.data import Scaling, holiday_of_day, make_loader, split
 from sinetwork.datasets import DATASETS, csv_dataset
 from sinetwork.model import PERIODS, SinusoidalNetwork, parse_components
 from sinetwork.plot import plot_components, plot_fit, plot_series
@@ -71,6 +71,8 @@ def main():
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--modulate', type=int, default=0, metavar='N',
                         help='let the faster components\' coefficients vary with the first N harmonics of the slowest')
+    parser.add_argument('--holidays', action='store_true',
+                        help='learn an effect per public holiday of the dataset\'s country, and a shared daily profile')
     parser.add_argument('--loss', choices=['mse', 'poisson'], default='mse',
                         help='poisson predicts exp(sum of sinusoids), for non-negative targets such as counts')
     parser.add_argument('--test-fraction', type=float, default=0.2, help='final fraction of the time range held out')
@@ -94,6 +96,8 @@ def main():
 
     df = dataset.load(args.data_dir)
     print(df.describe())
+    if args.holidays and dataset.holidays is None:
+        parser.error(f'--holidays: no holiday calendar registered for {dataset.name}')
     if args.loss == 'poisson' and (df['y'] < 0).any():
         parser.error(f'--loss poisson needs a non-negative target, {dataset.name} has values down to {df["y"].min()}')
 
@@ -102,6 +106,8 @@ def main():
     run_name = '-'.join(f'{period if period in PERIODS else period + "d"}{count}' for period, count in components.items())
     if args.modulate:
         run_name += f'-mod{args.modulate}'
+    if args.holidays:
+        run_name += '-holidays'
     if args.loss != 'mse':
         run_name += f'-{args.loss}'
     plot_dir = dataset_plot_dir / run_name
@@ -114,7 +120,9 @@ def main():
     test_loader = make_loader(test_df, scaling, device, args.batch_size, shuffle=False)
 
     model = SinusoidalNetwork(components, span=scaling.days([train_df['datetime'].max()])[0],
-                              log_link=args.loss == 'poisson', modulation=args.modulate).to(device)
+                              log_link=args.loss == 'poisson', modulation=args.modulate,
+                              holiday_of_day=holiday_of_day(scaling, df['datetime'].max(), *dataset.holidays)
+                              if args.holidays else None).to(device)
 
     # Define loss function and optimizer
     criterion = nn.MSELoss() if args.loss == 'mse' else nn.PoissonNLLLoss(log_input=False)
