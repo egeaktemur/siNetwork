@@ -69,6 +69,8 @@ def main():
     parser.add_argument('--epochs', type=int, default=500)
     parser.add_argument('--batch-size', type=int, help='default: the whole training set in one batch')
     parser.add_argument('--lr', type=float, default=0.001)
+    parser.add_argument('--modulate', type=int, default=0, metavar='N',
+                        help='let the faster components\' coefficients vary with the first N harmonics of the slowest')
     parser.add_argument('--loss', choices=['mse', 'poisson'], default='mse',
                         help='poisson predicts exp(sum of sinusoids), for non-negative targets such as counts')
     parser.add_argument('--test-fraction', type=float, default=0.2, help='final fraction of the time range held out')
@@ -98,6 +100,8 @@ def main():
     # plots/<dataset>/data.png, and one folder of fits per component setting, e.g. plots/bike/day6-week3-year3/
     dataset_plot_dir = args.plot_dir / dataset.name
     run_name = '-'.join(f'{period if period in PERIODS else period + "d"}{count}' for period, count in components.items())
+    if args.modulate:
+        run_name += f'-mod{args.modulate}'
     if args.loss != 'mse':
         run_name += f'-{args.loss}'
     plot_dir = dataset_plot_dir / run_name
@@ -110,7 +114,7 @@ def main():
     test_loader = make_loader(test_df, scaling, device, args.batch_size, shuffle=False)
 
     model = SinusoidalNetwork(components, span=scaling.days([train_df['datetime'].max()])[0],
-                              log_link=args.loss == 'poisson').to(device)
+                              log_link=args.loss == 'poisson', modulation=args.modulate).to(device)
 
     # Define loss function and optimizer
     criterion = nn.MSELoss() if args.loss == 'mse' else nn.PoissonNLLLoss(log_input=False)

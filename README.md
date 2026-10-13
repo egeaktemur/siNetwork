@@ -56,6 +56,7 @@ Options:
 - `--dataset` — one of the datasets above (default `airquality`)
 - `--components` — sinusoids per period (default `week:84 year:2`, see above). A period is `day`, `week`, `year` or a number of days (`0.5:2` for a 12-hour cycle).
 - `--epochs` (default 500), `--batch-size` (default: the whole training set), `--lr` (default 0.001), `--seed` (default 0)
+- `--modulate N` — let the sine and cosine coefficients of every component but the slowest vary with the slowest one's first N harmonics (default 0), so the weekly shape can differ between summer and winter. `1` helps slightly for jena, metro, power and beijing (jena test RMSE 4.47 → 4.40), but hurts bike, where the 2011 seasonal shape carries over badly to 2012. Runs go to `plots/<dataset>/<components>-modN/`, and the component plots show the shape at the start of the year.
 - `--loss` — `mse` (default) or `poisson`. `poisson` predicts exp(offset + trend + sinusoids), so the components multiply the level instead of adding to it: a rush hour that doubles the traffic doubles it in winter and in summer, and predictions are never negative. It needs a non-negative target (counts such as `bike` and `metro`, or `power`); runs go to `plots/<dataset>/<components>-poisson/`, and the component plots show factors.
 - `--test-fraction` — final fraction of the time range held out for testing (default 0.2)
 - `--data-dir` (default `data`), `--plot-dir` (default `plots`), `--plot-every` (default 50)
