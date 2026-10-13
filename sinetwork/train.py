@@ -7,7 +7,7 @@ import torch.optim as optim
 
 from sinetwork.data import Scaling, make_loader, split
 from sinetwork.datasets import DATASETS, csv_dataset
-from sinetwork.model import SinusoidalNetwork, parse_components
+from sinetwork.model import PERIODS, SinusoidalNetwork, parse_components
 from sinetwork.plot import plot_series, plot_waves
 
 
@@ -40,7 +40,7 @@ def train_model(model, dataset, train_df, test_df, scaling, train_loader, test_l
             print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {epoch_loss/len(train_loader):.4f}, '
                   f'Train RMSE: {evaluate_rmse(model, train_loader, scaling):.4f}, '
                   f'Test RMSE: {evaluate_rmse(model, test_loader, scaling):.4f}')
-            plot_waves(model, train_df, test_df, scaling, dataset.label, plot_dir / f'waves_epoch_{epoch+1:04d}.png')
+            plot_waves(model, train_df, test_df, scaling, dataset.label, plot_dir / f'fit_epoch_{epoch+1:04d}.png')
 
 
 def main():
@@ -78,9 +78,12 @@ def main():
     df = dataset.load(args.data_dir)
     print(df.describe())
 
-    plot_dir = args.plot_dir / dataset.name
+    # plots/<dataset>/data.png, and one folder of fits per component setting, e.g. plots/bike/day6-week3-year3/
+    dataset_plot_dir = args.plot_dir / dataset.name
+    run_name = '-'.join(f'{period if period in PERIODS else period + "d"}{count}' for period, count in components.items())
+    plot_dir = dataset_plot_dir / run_name
     plot_dir.mkdir(parents=True, exist_ok=True)
-    plot_series(df, dataset.label, plot_dir / 'series.png')
+    plot_series(df, dataset.label, dataset_plot_dir / 'data.png')
 
     train_df, test_df = split(df, args.test_fraction)
     scaling = Scaling.fit(train_df)
